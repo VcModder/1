@@ -23,7 +23,7 @@ import re
 # ============================================
 # BOT CONFIGURATION
 # ============================================
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # ← APNA TOKEN YAHAN
+BOT_TOKEN = "8904905040:AAGGTt6jaoNfFvEBzFH7vfgEWL6pw24xK8g"  # ← APNA TOKEN YAHAN
 ADMIN_IDS = [8170807285]  # ← APNI TELEGRAM ID
 
 # Bot Info

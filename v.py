@@ -21,9 +21,32 @@ import shutil
 import re
 
 # ============================================
+# HELPER FUNCTIONS - SABSE PEHLE DEFINE
+# ============================================
+
+def load_json(filename, default=None):
+    """Load JSON file safely"""
+    try:
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return default if default is not None else {}
+    except:
+        return default if default is not None else {}
+
+def save_json(filename, data):
+    """Save JSON file safely"""
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except:
+        return False
+
+# ============================================
 # BOT CONFIGURATION
 # ============================================
-BOT_TOKEN = "8904905040:AAGGTt6jaoNfFvEBzFH7vfgEWL6pw24xK8g"  # ← APNA TOKEN YAHAN
+BOT_TOKEN = "8904905040:AAGGTt6jaoNfFvEBzFH7vfgEWL6pw24xK8g"  # ← APNA TOKEN YAHAN DALO
 ADMIN_IDS = [8170807285]  # ← APNI TELEGRAM ID
 
 # Bot Info
@@ -32,7 +55,9 @@ BOT_USERNAME = "@MONX_BOT"
 OWNER_USERNAME = "@QTowner"
 BOT_VERSION = "3.0.0"
 
-# Data Directory
+# ============================================
+# DATA DIRECTORY SETUP
+# ============================================
 DATA_DIR = "MONX_DATA"
 USER_LOGS_DIR = f"{DATA_DIR}/user_logs"
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -58,29 +83,35 @@ for filepath, default_data in DEFAULT_FILES.items():
     if not os.path.exists(filepath):
         with open(filepath, 'w') as f:
             json.dump(default_data, f, indent=2)
+        print(f"✅ Created: {filepath}")
 
-# Load channels from file
+# Load channels
 CHANNELS_FILE = f"{DATA_DIR}/channels.json"
-FORCE_JOIN_CHANNELS = load_json(CHANNELS_FILE, []) if os.path.exists(CHANNELS_FILE) else []
+FORCE_JOIN_CHANNELS = load_json(CHANNELS_FILE, [])
 
-# Token System
+# ============================================
+# TOKEN SYSTEM
+# ============================================
 TOKEN_DAILY_BONUS = 2
 TOKEN_REFERRAL_BONUS = 2
 TOKEN_COSTS = {"1min": 2, "3min": 5, "10min": 10}
 FREE_DAILY_LIMIT = 5
-TOKEN_TO_INR = 0.5  # 100 token = 50₹
+TOKEN_TO_INR = 0.5
+WITHDRAWAL_MIN = 5
+WITHDRAWAL_COMMISSION = 0.20
 
-# Subscription Plans
+# ============================================
+# SUBSCRIPTION PLANS
+# ============================================
 SUBSCRIPTION_PLANS = {
-    "1hour": {"price_usd": 0.3, "price_inr": 28, "hours": 1, "bonus": 0, "icon": "🕐"},
-    "1day": {"price_usd": 1, "price_inr": 95, "hours": 24, "bonus": 0, "icon": "📅"},
-    "1week": {"price_usd": 3, "price_inr": 284, "hours": 168, "bonus": 25, "icon": "🍺"},
-    "1month": {"price_usd": 5, "price_inr": 473, "hours": 720, "bonus": 50, "icon": "🌙", "own_bot": True},
-    "1year": {"price_usd": 30, "price_inr": 2836, "hours": 8760, "bonus": 10, "icon": "🎄", "daily_bonus": True},
-    "lifetime": {"price_usd": 100, "price_inr": 9455, "hours": 87600, "bonus": 0, "icon": "🔥", "lifetime": True}
+    "1hour": {"price_usd": 0.3, "price_inr": 28, "hours": 1, "bonus": 0, "icon": "🕐", "duration": "1 hour"},
+    "1day": {"price_usd": 1, "price_inr": 95, "hours": 24, "bonus": 0, "icon": "📅", "duration": "1 day"},
+    "1week": {"price_usd": 3, "price_inr": 284, "hours": 168, "bonus": 25, "icon": "🍺", "duration": "1 week"},
+    "1month": {"price_usd": 5, "price_inr": 473, "hours": 720, "bonus": 50, "icon": "🌙", "duration": "1 month", "own_bot": True},
+    "1year": {"price_usd": 30, "price_inr": 2836, "hours": 8760, "bonus": 10, "icon": "🎄", "duration": "1 year"},
+    "lifetime": {"price_usd": 100, "price_inr": 9455, "hours": 87600, "bonus": 0, "icon": "🔥", "duration": "Lifetime"}
 }
 
-# Language Options
 LANGUAGES = {
     "EN": "English",
     "HI": "Hindi",
@@ -91,25 +122,10 @@ LANGUAGES = {
 # Initialize bot
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode='HTML')
 
-# Helper functions
-def load_json(filename, default=None):
-    try:
-        if os.path.exists(filename):
-            with open(filename, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return default if default is not None else {}
-    except:
-        return default if default is not None else {}
+# ============================================
+# DATA MANAGER CLASS
+# ============================================
 
-def save_json(filename, data):
-    try:
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        return True
-    except:
-        return False
-
-# Data Manager Class
 class DataManager:
     def __init__(self):
         self.users = load_json(f"{DATA_DIR}/users.json", {})
@@ -131,7 +147,7 @@ class DataManager:
                 'user_id': user_id,
                 'username': '',
                 'first_name': '',
-                'tokens': 10,  # Welcome bonus
+                'tokens': 10,
                 'total_tokens_earned': 10,
                 'total_tokens_used': 0,
                 'balance_usd': 0,
@@ -172,8 +188,8 @@ class DataManager:
     
     def add_tokens(self, user_id, amount, reason="admin"):
         user = self.get_user(user_id)
-        user['tokens'] += amount
-        user['total_tokens_earned'] += amount
+        user['tokens'] = user.get('tokens', 0) + amount
+        user['total_tokens_earned'] = user.get('total_tokens_earned', 0) + amount
         self.transactions.append({
             'user_id': str(user_id),
             'type': 'token',
@@ -187,9 +203,9 @@ class DataManager:
     
     def remove_tokens(self, user_id, amount, reason="check"):
         user = self.get_user(user_id)
-        if user['tokens'] >= amount:
+        if user.get('tokens', 0) >= amount:
             user['tokens'] -= amount
-            user['total_tokens_used'] += amount
+            user['total_tokens_used'] = user.get('total_tokens_used', 0) + amount
             self.transactions.append({
                 'user_id': str(user_id),
                 'type': 'token',
@@ -204,8 +220,8 @@ class DataManager:
     
     def add_balance(self, user_id, amount_usd, amount_inr, reason="referral"):
         user = self.get_user(user_id)
-        user['balance_usd'] += amount_usd
-        user['balance_inr'] += amount_inr
+        user['balance_usd'] = user.get('balance_usd', 0) + amount_usd
+        user['balance_inr'] = user.get('balance_inr', 0) + amount_inr
         self.save_users()
         return True
     
@@ -314,9 +330,12 @@ class DataManager:
         save_json(f"{DATA_DIR}/subscriptions.json", self.subscriptions)
         return expiry
 
+# Initialize data manager
 data_manager = DataManager()
 
-# User Sessions
+# ============================================
+# USER SESSIONS
+# ============================================
 user_sessions = {}
 
 class UserSession:
@@ -336,24 +355,21 @@ class UserSession:
         self.current_message_id = None
         self.last_message_id = None
 
-# Message deletion helper
-def delete_previous_message(chat_id, session):
-    """Delete previous message"""
-    try:
-        if session.last_message_id:
-            bot.delete_message(chat_id, session.last_message_id)
-    except:
-        pass
+# ============================================
+# FORCE JOIN FUNCTIONS
+# ============================================
 
-# Force Join Functions
 def check_force_join(user_id):
     try:
         for channel in FORCE_JOIN_CHANNELS:
             username = channel.get('username', '')
             if username.startswith('@'):
-                chat_member = bot.get_chat_member(username, user_id)
-                if chat_member.status in ['left', 'kicked', 'banned']:
-                    return False, channel
+                try:
+                    chat_member = bot.get_chat_member(username, user_id)
+                    if chat_member.status in ['left', 'kicked', 'banned']:
+                        return False, channel
+                except:
+                    pass
         return True, None
     except:
         return True, None
@@ -361,7 +377,10 @@ def check_force_join(user_id):
 def create_force_join_keyboard():
     markup = types.InlineKeyboardMarkup(row_width=1)
     for i, channel in enumerate(FORCE_JOIN_CHANNELS):
-        btn = types.InlineKeyboardButton(f"📢 JOIN CHANNEL {i+1}", url=channel.get('invite_link', ''))
+        btn = types.InlineKeyboardButton(
+            f"📢 JOIN CHANNEL {i+1}",
+            url=channel.get('invite_link', 'https://t.me/')
+        )
         markup.add(btn)
     btn_joined = types.InlineKeyboardButton("✅ I'VE JOINED ALL", callback_data="check_join")
     markup.add(btn_joined)
@@ -396,6 +415,33 @@ def create_main_menu(user_id):
     markup.add(btn_clone, btn_help)
     
     return markup
+
+def delete_later(chat_id, message_id, delay):
+    time.sleep(delay)
+    try:
+        bot.delete_message(chat_id, message_id)
+    except:
+        pass
+
+def start_output_monitor(session):
+    def monitor():
+        while session.process and session.process.isalive():
+            try:
+                output = session.process.read_nonblocking(size=4096, timeout=0.1)
+                if output:
+                    session.output_queue.put(output.strip())
+                    session.output_history.append(output.strip())
+                    if len(session.output_history) > session.max_output_lines:
+                        session.output_history = session.output_history[-session.max_output_lines:]
+            except pexpect.TIMEOUT:
+                continue
+            except pexpect.EOF:
+                break
+            except Exception:
+                break
+        session.is_checking = False
+    
+    threading.Thread(target=monitor, daemon=True).start()
 
 # ============================================
 # BOT COMMANDS
@@ -434,7 +480,6 @@ def start_command(message):
     user['last_activity'] = datetime.now().isoformat()
     data_manager.save_users()
     
-    # Referral check
     try:
         if len(message.text.split()) > 1:
             referral_code = message.text.split()[1]
@@ -479,13 +524,6 @@ Version: {BOT_VERSION}
     if user_id in user_sessions:
         user_sessions[user_id].last_message_id = msg.message_id
 
-def delete_later(chat_id, message_id, delay):
-    time.sleep(delay)
-    try:
-        bot.delete_message(chat_id, message_id)
-    except:
-        pass
-
 @bot.message_handler(commands=['help'])
 def help_command(message):
     user_id = message.from_user.id
@@ -517,10 +555,6 @@ Auto-login with {BOT_NAME} credentials (Anonymous)
 • 30$ (2836₹) = 1 year +Daily 10 tokens
 • 100$ (9455₹) = Lifetime +Join Friends
 
-👛 <b>Withdrawal:</b>
-• Minimum: 5$
-• Commission: 20%
-
 📌 <b>Commands:</b>
 /start - Start bot
 /help - Help
@@ -538,10 +572,7 @@ Auto-login with {BOT_NAME} credentials (Anonymous)
 ⚠️ <b>Warning:</b>
 Only test your own websites
 """
-    msg = bot.reply_to(message, help_text)
-    if user_id in user_sessions:
-        delete_previous_message(message.chat.id, user_sessions[user_id])
-        user_sessions[user_id].last_message_id = msg.message_id
+    bot.reply_to(message, help_text)
 
 @bot.message_handler(commands=['login'])
 def login_command(message):
@@ -566,13 +597,13 @@ def login_command(message):
     def do_auto_login():
         try:
             script_file = None
-            for f in ['c2.py', 'c.py', 'v.py']:
-                if os.path.exists(f) and f != 'v.py':
+            for f in ['c2.py', 'c.py']:
+                if os.path.exists(f):
                     script_file = f
                     break
             
             if not script_file:
-                bot.edit_message_text("❌ No script found!", message.chat.id, msg.message_id)
+                bot.edit_message_text("❌ No script found (c.py/c2.py)!", message.chat.id, msg.message_id)
                 return
             
             session.process = pexpect.spawn(f'python3 {script_file}', encoding='utf-8', timeout=30)
@@ -603,26 +634,6 @@ def login_command(message):
     
     threading.Thread(target=do_auto_login, daemon=True).start()
 
-def start_output_monitor(session):
-    def monitor():
-        while session.process and session.process.isalive():
-            try:
-                output = session.process.read_nonblocking(size=4096, timeout=0.1)
-                if output:
-                    session.output_queue.put(output.strip())
-                    session.output_history.append(output.strip())
-                    if len(session.output_history) > session.max_output_lines:
-                        session.output_history = session.output_history[-session.max_output_lines:]
-            except pexpect.TIMEOUT:
-                continue
-            except pexpect.EOF:
-                break
-            except Exception:
-                break
-        session.is_checking = False
-    
-    threading.Thread(target=monitor, daemon=True).start()
-
 @bot.message_handler(commands=['check'])
 def check_command(message):
     user_id = message.from_user.id
@@ -644,7 +655,7 @@ def check_command(message):
     session = user_sessions[user_id]
     
     if not session.is_logged_in:
-        msg = bot.reply_to(message, "❌ Pehle login karo!\nClick: 🔐 LOGIN")
+        bot.reply_to(message, "❌ Pehle login karo!\nClick: 🔐 LOGIN")
         return
     
     if session.is_checking:
@@ -722,8 +733,8 @@ def process_check_command(message):
         session.check_duration = minutes
         session.check_start_time = datetime.now()
         
-        user['total_checks'] += 1
-        user['daily_checks'] += 1
+        user['total_checks'] = user.get('total_checks', 0) + 1
+        user['daily_checks'] = user.get('daily_checks', 0) + 1
         user['last_check_date'] = datetime.now().date().isoformat()
         data_manager.save_users()
         
@@ -804,7 +815,7 @@ ID: <code>{user_id}</code>
 
 📅 Member Since: {user['created_at'][:10]}
 """
-    msg = bot.reply_to(message, profile_text)
+    bot.reply_to(message, profile_text)
 
 @bot.message_handler(commands=['balance'])
 def balance_command(message):
@@ -829,7 +840,7 @@ Earn:
 • Daily: /daily (+{TOKEN_DAILY_BONUS})
 • Referral: /referral (+{TOKEN_REFERRAL_BONUS})
 """
-    msg = bot.reply_to(message, balance_text)
+    bot.reply_to(message, balance_text)
 
 @bot.message_handler(commands=['daily'])
 def daily_command(message):
@@ -897,7 +908,7 @@ def subscription_command(message):
 
 Payment: Telegram Stars ⭐
 """
-    msg = bot.reply_to(message, sub_text, reply_markup=markup)
+    bot.reply_to(message, sub_text, reply_markup=markup)
 
 @bot.message_handler(commands=['status'])
 def status_command(message):
@@ -928,10 +939,8 @@ def output_command(message):
     if user_id in user_sessions:
         session = user_sessions[user_id]
         if session.output_history:
-            # Last 5 lines in message
             output_text = '\n'.join(session.output_history[-5:])
             
-            # Full output to file
             output_file = f"MONX-{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
             with open(output_file, 'w') as f:
                 f.write('\n'.join(session.output_history))
@@ -970,7 +979,7 @@ def stop_command(message):
         bot.reply_to(message, "❌ Session not found")
 
 # ============================================
-# CALLBACK HANDLERS
+# CALLBACK HANDLER
 # ============================================
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -988,7 +997,6 @@ def handle_callback(call):
                 except:
                     pass
                 
-                user = data_manager.get_user(user_id)
                 welcome_msg = bot.send_message(call.message.chat.id, "✅ <b>Thanks For Joining!</b>\n\n⏱️ Loading... 5")
                 
                 def countdown():
@@ -1029,8 +1037,6 @@ def handle_callback(call):
             wallet_command(call.message)
         elif data == "btn_status":
             status_command(call.message)
-        elif data == "btn_clone":
-            clone_bot_command(call.message)
         elif data == "btn_help":
             help_command(call.message)
         elif data.startswith("sub_"):
@@ -1040,7 +1046,7 @@ def handle_callback(call):
     except Exception as e:
         print(f"Callback error: {e}")
         try:
-            bot.answer_callback_query(call.id, f"❌ Error")
+            bot.answer_callback_query(call.id)
         except:
             pass
 
@@ -1056,48 +1062,11 @@ Balance (USD): ${user['balance_usd']}
 Tokens: {user['tokens']}
 
 <b>Withdrawal:</b>
-Minimum: $5
-Commission: 20%
+Minimum: ${WITHDRAWAL_MIN}
+Commission: {int(WITHDRAWAL_COMMISSION * 100)}%
 Methods: INR/USDT
 """
     bot.reply_to(message, wallet_text)
-
-def clone_bot_command(message):
-    user_id = message.from_user.id
-    user = data_manager.get_user(user_id)
-    sub_plan, sub_expiry = data_manager.get_subscription(user_id)
-    
-    if not sub_plan or sub_plan not in ['1month', '1year', 'lifetime']:
-        bot.reply_to(message, "❌ Clone bot requires 5$+ subscription!")
-        return
-    
-    msg = bot.reply_to(message, "🤖 <b>Create Your Own Bot</b>\n\nBot Token bhejo (@BotFather se):")
-    bot.register_next_step_handler(msg, process_clone_token)
-
-def process_clone_token(message):
-    user_id = message.from_user.id
-    token = message.text.strip()
-    
-    try:
-        # Test token
-        test_bot = telebot.TeleBot(token)
-        bot_info = test_bot.get_me()
-        
-        data_manager.clones[str(user_id)] = {
-            'bot_token': token,
-            'bot_username': bot_info.username,
-            'bot_name': bot_info.first_name,
-            'created_at': datetime.now().isoformat(),
-            'owner_id': user_id,
-            'bot_name_custom': f"MONX-{bot_info.first_name}"
-        }
-        save_json(f"{DATA_DIR}/clones.json", data_manager.clones)
-        
-        data_manager.log_activity(user_id, "clone_bot_created", f"Created bot: @{bot_info.username}")
-        
-        bot.reply_to(message, f"✅ <b>Bot Created!</b>\n\nName: {bot_info.first_name}\nUsername: @{bot_info.username}\n\nAapka bot ready hai!")
-    except Exception as e:
-        bot.reply_to(message, f"❌ Invalid token!\nError: {str(e)}")
 
 def process_subscription(call, plan_name):
     if plan_name not in SUBSCRIPTION_PLANS:
@@ -1105,16 +1074,6 @@ def process_subscription(call, plan_name):
         return
     
     plan = SUBSCRIPTION_PLANS[plan_name]
-    
-    # Get sticker/image from data
-    stickers = data_manager.stickers
-    if stickers:
-        # Send sticker first
-        sticker_id = random.choice(list(stickers.values()))
-        try:
-            bot.send_sticker(call.message.chat.id, sticker_id)
-        except:
-            pass
     
     prices = [types.LabeledPrice(label=f"{plan['duration']} Subscription", amount=int(plan['price_usd'] * 100))]
     
@@ -1146,15 +1105,6 @@ def successful_payment_handler(message):
     if plan_name in SUBSCRIPTION_PLANS:
         plan = SUBSCRIPTION_PLANS[plan_name]
         expiry = data_manager.set_subscription(user_id, plan_name)
-        
-        # Send sticker/image as confirmation
-        stickers = data_manager.stickers
-        if stickers:
-            sticker_id = random.choice(list(stickers.values()))
-            try:
-                bot.send_sticker(message.chat.id, sticker_id)
-            except:
-                pass
         
         data_manager.log_activity(user_id, "subscription_purchase", f"Purchased {plan_name} via Stars")
         
@@ -1193,7 +1143,7 @@ Banned: {stats['total_banned']}
 Clones: {stats['total_clones']}
 
 <b>Commands:</b>
-/addc &lt;channel_link&gt; - Add force join channel
+/addc &lt;channel_link&gt; - Add force join
 /rmvc &lt;channel_link&gt; - Remove channel
 /give &lt;user_id&gt; &lt;tokens&gt; - Give tokens
 /addb &lt;user_id&gt; &lt;amount&gt; - Add balance
@@ -1201,8 +1151,6 @@ Clones: {stats['total_clones']}
 /unban &lt;user_id&gt; - Unban user
 /log [user_id] - View logs
 /broadcast &lt;msg&gt; - Broadcast
-/adds - Add sticker (reply to sticker)
-/addi - Add image (reply to image)
 /subunlock &lt;user_id&gt; &lt;plan&gt; - Give subscription
 /sunlock &lt;user_id&gt; - Remove subscription
 """
@@ -1268,7 +1216,7 @@ def give_command(message):
         target_id = int(parts[1])
         amount = int(parts[2])
         
-        new_balance = data_manager.add_tokens(target_id, amount, "admin_give")
+        data_manager.add_tokens(target_id, amount, "admin_give")
         bot.reply_to(message, f"✅ {amount} tokens given to {target_id}")
         try:
             bot.send_message(target_id, f"💰 +{amount} tokens from admin!")
@@ -1372,34 +1320,6 @@ def broadcast_command(message):
     except:
         bot.reply_to(message, "❌ Usage: /broadcast <message>")
 
-@bot.message_handler(commands=['adds'])
-def add_sticker_command(message):
-    user_id = message.from_user.id
-    if user_id not in ADMIN_IDS:
-        return
-    
-    if message.reply_to_message and message.reply_to_message.sticker:
-        sticker_id = message.reply_to_message.sticker.file_id
-        data_manager.stickers[str(len(data_manager.stickers)+1)] = sticker_id
-        save_json(f"{DATA_DIR}/stickers.json", data_manager.stickers)
-        bot.reply_to(message, "✅ Sticker added!")
-    else:
-        bot.reply_to(message, "❌ Reply to a sticker!")
-
-@bot.message_handler(commands=['addi'])
-def add_image_command(message):
-    user_id = message.from_user.id
-    if user_id not in ADMIN_IDS:
-        return
-    
-    if message.reply_to_message and message.reply_to_message.photo:
-        photo_id = message.reply_to_message.photo[-1].file_id
-        data_manager.stickers[str(len(data_manager.stickers)+1)] = photo_id
-        save_json(f"{DATA_DIR}/stickers.json", data_manager.stickers)
-        bot.reply_to(message, "✅ Image added!")
-    else:
-        bot.reply_to(message, "❌ Reply to an image!")
-
 @bot.message_handler(commands=['subunlock'])
 def subunlock_command(message):
     user_id = message.from_user.id
@@ -1487,4 +1407,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ Crash: {e}")
             print("🔄 Restarting...")
-            time.sleep(0.6)
+            time.sleep(5)
